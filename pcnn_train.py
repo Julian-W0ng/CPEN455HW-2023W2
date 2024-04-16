@@ -134,7 +134,10 @@ if __name__ == '__main__':
 
     #set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("mps") if torch.backends.mps.is_available() else device
     kwargs = {'num_workers':1, 'pin_memory':True, 'drop_last':True}
+    if torch.backends.mps.is_available():
+        kwargs['num_workers'] = 0
 
     # set data
     if "mnist" in args.dataset:

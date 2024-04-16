@@ -105,12 +105,12 @@ class PixelCNN(nn.Module):
         if self.init_padding is not sample:
             xs = [int(y) for y in x.size()]
             padding = Variable(torch.ones(xs[0], 1, xs[2], xs[3]), requires_grad=False)
-            self.init_padding = padding.cuda() if x.is_cuda else padding
+            self.init_padding = padding.cuda() if x.is_cuda else padding.to(x.device)
 
         if sample :
             xs = [int(y) for y in x.size()]
             padding = Variable(torch.ones(xs[0], 1, xs[2], xs[3]), requires_grad=False)
-            padding = padding.cuda() if x.is_cuda else padding
+            padding = padding.cuda() if x.is_cuda else padding.to(x.device)
             x = torch.cat((x, padding), 1)
 
         ###      UP PASS    ###

@@ -58,6 +58,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     pprint(args.__dict__)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("mps") if torch.backends.mps.is_available() else device
     kwargs = {'num_workers':0, 'pin_memory':True, 'drop_last':False}
 
     ds_transforms = transforms.Compose([transforms.Resize((32, 32)), rescaling])

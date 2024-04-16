@@ -52,7 +52,7 @@ class PixelCNNLayer_down(nn.Module):
 
 class PixelCNN(nn.Module):
     def __init__(self, nr_resnet=5, nr_filters=80, nr_logistic_mix=10,
-                    resnet_nonlinearity='concat_elu', input_channels=3):
+                    resnet_nonlinearity='concat_elu', input_channels=3, num_classes=4):
         super(PixelCNN, self).__init__()
         if resnet_nonlinearity == 'concat_elu' :
             self.resnet_nonlinearity = lambda x : concat_elu(x)
@@ -96,8 +96,11 @@ class PixelCNN(nn.Module):
         self.nin_out = nin(nr_filters, num_mix * nr_logistic_mix)
         self.init_padding = None
 
+        self.num_classes = num_classes
+        self.embeddings = nn.Embedding(num_classes, 160)
 
-    def forward(self, x, sample=False):
+
+    def forward(self, x, labels, sample=False):
         # similar as done in the tf repo :
         if self.init_padding is not sample:
             xs = [int(y) for y in x.size()]
@@ -129,6 +132,11 @@ class PixelCNN(nn.Module):
         u  = u_list.pop()
         ul = ul_list.pop()
 
+        label_embeddings = self.embeddings(labels)
+        B, D, H, W = ul.size()
+        label_embeddings = label_embeddings.unsqueeze(-1).unsqueeze(-1).expand(B, D, H, W)
+        ul = ul + label_embeddings
+
         for i in range(3):
             # resnet block
             u, ul = self.down_layers[i](u, ul, u_list, ul_list)
@@ -145,45 +153,6 @@ class PixelCNN(nn.Module):
         return x_out
 
 
-class PixelCNNPlusPlus(nn.Module):
-    def __init__(self, nr_resnet=5, nr_filters=80, nr_logistic_mix=10,
-                    resnet_nonlinearity='concat_elu', input_channels=3, num_classes=4):
-        super(PixelCNNPlusPlus, self).__init__()
-        self.pixelcnn = PixelCNN(nr_resnet, nr_filters, nr_logistic_mix,
-                                resnet_nonlinearity, input_channels)
-        self.embeddings = nn.Embedding(num_classes, 10*nr_logistic_mix)
-
-    def forward(self, x, labels, sample=False):
-        pixelcnn_out = self.pixelcnn(x, sample)
-        label_embedding = self.embeddings(labels)
-        B, D, H, W = pixelcnn_out.shape
-        B, D = label_embedding.shape
-        label_embedding = label_embedding.view(B, D, 1, 1).expand(B, D, H, W)
-        return pixelcnn_out + F.elu(label_embedding)
-    
-
-class PixelCNNPlusPlusClassifier(nn.Module):
-    def __init__(self, NUM_CLASSES, pixelcnnpp: PixelCNNPlusPlus, loss_op):
-        super(PixelCNNPlusPlusClassifier, self).__init__()
-        self.NUM_CLASSES = NUM_CLASSES
-        self.pixelcnnpp = pixelcnnpp
-        self.loss_op = loss_op
-        if 'models' not in os.listdir():
-            os.mkdir('models')
-        torch.save(self.state_dict(), 'models/conditional_pixelcnn.pth')
-
-    def forward(self, x, device):
-            B = x.shape[0]
-            labels = torch.zeros(B, dtype=torch.int64).to(device)
-            guess_losses = torch.zeros((self.NUM_CLASSES, B)).to(device)
-            for i in range(self.NUM_CLASSES):
-                guess_label = torch.ones(B, dtype=torch.int64).to(device) * i
-                model_output = self.pixelcnnpp(x, guess_label)
-                guess_losses[i] = self.loss_op(x, model_output, False)
-            _, labels = torch.min(guess_losses, dim=0)
-            return labels
-
-    
 class random_classifier(nn.Module):
     def __init__(self, NUM_CLASSES):
         super(random_classifier, self).__init__()

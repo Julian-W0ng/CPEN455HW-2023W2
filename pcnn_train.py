@@ -8,6 +8,7 @@ import wandb
 from utils import *
 from model import * 
 from dataset import *
+from classification_evaluation import get_label
 from tqdm import tqdm
 from pprint import pprint
 import argparse
@@ -27,7 +28,7 @@ def train_or_test(model, data_loader, optimizer, loss_op, device, args, epoch, m
         model_input, category_names = item
         model_input = model_input.to(device)
         if mode == 'training' or mode == 'val':
-            categories = torch.tensor([my_bidict[cat] for cat in category_names]).to(device)
+            categories = torch.tensor([my_bidict[cat] for cat in category_names], dtype=torch.int32).to(device)
             model_output = model(model_input, categories)
             loss = loss_op(model_input, model_output)
             loss_tracker.update(loss.item()/deno)
@@ -35,23 +36,22 @@ def train_or_test(model, data_loader, optimizer, loss_op, device, args, epoch, m
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
+            else:
+                labels = get_label(model, model_input, device)
+                accuracy_tracker = mean_tracker()
+                accuracy_tracker.update(torch.sum(labels == categories).item()/args.batch_size)
         else:
-            B = model_input.shape[0]
-            num_classes = len(my_bidict)
-            labels = torch.zeros(B, dtype=torch.int64).to(device)
-            losses = torch.zeros(B).to(device)
-            guess_losses = torch.zeros((num_classes, B)).to(device)
-            for i in range(num_classes):
-                guess_label = torch.ones(B, dtype=torch.int64).to(device) * i
-                model_output = model(model_input, guess_label)
-                guess_losses[i] = loss_op(model_input, model_output, False)
-            losses, labels = torch.min(guess_losses, dim=0)
-            loss_tracker.update(torch.sum(losses).item()/deno)
+            labels = get_label(model, model_input, device)
+            model_output = model(model_input, labels)
+            loss = loss_op(model_input, model_output)
+            loss_tracker.update(torch.sum(loss).item()/deno)
 
         
     if args.en_wandb:
         wandb.log({mode + "-Average-BPD" : loss_tracker.get_mean()})
         wandb.log({mode + "-epoch": epoch})
+        if mode == 'val':
+            wandb.log({mode + "-Accuracy": accuracy_tracker.get_mean()})
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -192,7 +192,7 @@ if __name__ == '__main__':
     loss_op   = lambda real, fake, sum_over_batch=True : discretized_mix_logistic_loss(real, fake, sum_over_batch)
     sample_op = lambda x : sample_from_discretized_mix_logistic(x, args.nr_logistic_mix)
 
-    model = PixelCNNPlusPlus(nr_resnet=args.nr_resnet, nr_filters=args.nr_filters, 
+    model = PixelCNN(nr_resnet=args.nr_resnet, nr_filters=args.nr_filters, 
                 input_channels=input_channels, nr_logistic_mix=args.nr_logistic_mix, num_classes=len(my_bidict))
     model = model.to(device)
 

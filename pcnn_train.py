@@ -35,23 +35,39 @@ def train_or_test(model, data_loader, optimizer, loss_op, device, args, epoch, m
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
+            else:
+                # num_classes = len(my_bidict) batch_size = args.batch_size
+                # labels = torch.zeros(batch_size, dtype=torch.int64).to(device)
+                # losses = torch.zeros(batch_size).to(device)
+                # guess_losses = torch.zeros((num_classes, batch_size)).to(device)
+                # for i in range(num_classes):
+                #     guess_label = torch.ones(batch_size, dtype=torch.int64).to(device) * i
+                #     model_output = model(model_input, guess_label)
+                #     guess_losses[i] = loss_op(model_input, model_output, False)
+                # losses, labels = torch.min(guess_losses, dim=0)
+                loss, labels = model.classify(model_input, device, loss_op)
+                classification_tracker = mean_tracker()
+                classification_tracker.update(torch.sum(labels == categories).item()/args.batch_size)
         else:
-            B = model_input.shape[0]
-            num_classes = len(my_bidict)
-            labels = torch.zeros(B, dtype=torch.int64).to(device)
-            losses = torch.zeros(B).to(device)
-            guess_losses = torch.zeros((num_classes, B)).to(device)
-            for i in range(num_classes):
-                guess_label = torch.ones(B, dtype=torch.int64).to(device) * i
-                model_output = model(model_input, guess_label)
-                guess_losses[i] = loss_op(model_input, model_output, False)
-            losses, labels = torch.min(guess_losses, dim=0)
-            loss_tracker.update(torch.sum(losses).item()/deno)
+            # num_classes = len(my_bidict)
+            # batch_size = args.batch_size
+            # labels = torch.zeros(batch_size, dtype=torch.int64).to(device)
+            # losses = torch.zeros(batch_size).to(device)
+            # guess_losses = torch.zeros((num_classes, batch_size)).to(device)
+            # for i in range(num_classes):
+            #     guess_label = torch.ones(batch_size, dtype=torch.int64).to(device) * i
+            #     model_output = model(model_input, guess_label)
+            #     guess_losses[i] = loss_op(model_input, model_output, False)
+            # losses, labels = torch.min(guess_losses, dim=0)
+            loss, labels = model.classify(model_input, device, loss_op)
+            loss_tracker.update(torch.sum(loss).item()/deno)
 
         
     if args.en_wandb:
         wandb.log({mode + "-Average-BPD" : loss_tracker.get_mean()})
         wandb.log({mode + "-epoch": epoch})
+        if (mode == 'val'):
+            wandb.log({mode + "-Accuracy": classification_tracker.get_mean()})
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -134,7 +150,10 @@ if __name__ == '__main__':
 
     #set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("mps") if torch.backends.mps.is_available() else device
     kwargs = {'num_workers':1, 'pin_memory':True, 'drop_last':True}
+    if device.type == 'mps':
+        kwargs['num_workers'] = 0
 
     # set data
     if "mnist" in args.dataset:
@@ -192,7 +211,7 @@ if __name__ == '__main__':
     loss_op   = lambda real, fake, sum_over_batch=True : discretized_mix_logistic_loss(real, fake, sum_over_batch)
     sample_op = lambda x : sample_from_discretized_mix_logistic(x, args.nr_logistic_mix)
 
-    model = PixelCNNPlusPlus(nr_resnet=args.nr_resnet, nr_filters=args.nr_filters, 
+    model = PixelCNN(nr_resnet=args.nr_resnet, nr_filters=args.nr_filters, 
                 input_channels=input_channels, nr_logistic_mix=args.nr_logistic_mix, num_classes=len(my_bidict))
     model = model.to(device)
 

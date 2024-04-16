@@ -31,6 +31,7 @@ if __name__ == "__main__":
     gen_data_dir = "samples"
     BATCH_SIZE=128
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = torch.device("mps") if torch.backends.mps.is_available() else device
     
     if not os.path.exists(gen_data_dir):
         os.makedirs(gen_data_dir)
@@ -38,6 +39,7 @@ if __name__ == "__main__":
     #Load your model and generate images in the gen_data_dir
     model = PixelCNN(nr_resnet=1, nr_filters=40, input_channels=3, nr_logistic_mix=5)
     model = model.to(device)
+    model.load_state_dict(torch.load('models/conditional_pixelcnn.pth'))
     model = model.eval()
     my_sample(model=model, gen_data_dir=gen_data_dir)
     #End of your code

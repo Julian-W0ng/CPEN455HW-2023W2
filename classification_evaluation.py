@@ -19,8 +19,9 @@ NUM_CLASSES = len(my_bidict)
 # And get the predicted label, which is a tensor of shape (batch_size,)
 # Begin of your code
 def get_label(model, model_input, device):
-    answer = model(model_input, device)
-    return answer
+    loss_op = lambda model_input, model_output : discretized_mix_logistic_loss(model_input, model_output, sum_over_batch=False)
+    _, labels = model.classify(model_input, device, loss_op)
+    return labels
 # End of your code
 
 def classifier(model, data_loader, device):
@@ -51,6 +52,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     pprint(args.__dict__)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("mps") if torch.backends.mps.is_available() else device
     kwargs = {'num_workers':0, 'pin_memory':True, 'drop_last':False}
 
     ds_transforms = transforms.Compose([transforms.Resize((32, 32)), rescaling])
@@ -64,7 +66,7 @@ if __name__ == '__main__':
     #Write your code here
     #You should replace the random classifier with your trained model
     #Begin of your code
-    model = random_classifier(NUM_CLASSES)
+    model = PixelCNN()
     #End of your code
     
     model = model.to(device)

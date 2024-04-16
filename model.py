@@ -52,7 +52,7 @@ class PixelCNNLayer_down(nn.Module):
 
 class PixelCNN(nn.Module):
     def __init__(self, nr_resnet=5, nr_filters=80, nr_logistic_mix=10,
-                    resnet_nonlinearity='concat_elu', input_channels=3):
+                    resnet_nonlinearity='concat_elu', input_channels=3, num_classes=4):
         super(PixelCNN, self).__init__()
         if resnet_nonlinearity == 'concat_elu' :
             self.resnet_nonlinearity = lambda x : concat_elu(x)
@@ -96,18 +96,21 @@ class PixelCNN(nn.Module):
         self.nin_out = nin(nr_filters, num_mix * nr_logistic_mix)
         self.init_padding = None
 
+        self.embeddings = nn.Embedding(num_classes, 160)
+        self.num_classes = num_classes
 
-    def forward(self, x, sample=False):
+
+    def forward(self, x, labels, sample=False):
         # similar as done in the tf repo :
         if self.init_padding is not sample:
             xs = [int(y) for y in x.size()]
             padding = Variable(torch.ones(xs[0], 1, xs[2], xs[3]), requires_grad=False)
-            self.init_padding = padding.cuda() if x.is_cuda else padding
+            self.init_padding = padding.cuda() if x.is_cuda else padding.to(x.device)
 
         if sample :
             xs = [int(y) for y in x.size()]
             padding = Variable(torch.ones(xs[0], 1, xs[2], xs[3]), requires_grad=False)
-            padding = padding.cuda() if x.is_cuda else padding
+            padding = padding.cuda() if x.is_cuda else padding.to(x.device)
             x = torch.cat((x, padding), 1)
 
         ###      UP PASS    ###
@@ -128,6 +131,9 @@ class PixelCNN(nn.Module):
         ###    DOWN PASS    ###
         u  = u_list.pop()
         ul = ul_list.pop()
+        B, D, H, W = u.size()
+        u += self.embeddings(labels).view(B, D, 1, 1).expand(B, D, H, W)
+        ul += self.embeddings(labels).view(B, D, 1, 1).expand(B, D, H, W)
 
         for i in range(3):
             # resnet block
@@ -144,44 +150,15 @@ class PixelCNN(nn.Module):
 
         return x_out
 
-
-class PixelCNNPlusPlus(nn.Module):
-    def __init__(self, nr_resnet=5, nr_filters=80, nr_logistic_mix=10,
-                    resnet_nonlinearity='concat_elu', input_channels=3, num_classes=4):
-        super(PixelCNNPlusPlus, self).__init__()
-        self.pixelcnn = PixelCNN(nr_resnet, nr_filters, nr_logistic_mix,
-                                resnet_nonlinearity, input_channels)
-        self.embeddings = nn.Embedding(num_classes, 10*nr_logistic_mix)
-
-    def forward(self, x, labels, sample=False):
-        pixelcnn_out = self.pixelcnn(x, sample)
-        label_embedding = self.embeddings(labels)
-        B, D, H, W = pixelcnn_out.shape
-        B, D = label_embedding.shape
-        label_embedding = label_embedding.view(B, D, 1, 1).expand(B, D, H, W)
-        return pixelcnn_out + F.elu(label_embedding)
-    
-
-class PixelCNNPlusPlusClassifier(nn.Module):
-    def __init__(self, NUM_CLASSES, pixelcnnpp: PixelCNNPlusPlus, loss_op):
-        super(PixelCNNPlusPlusClassifier, self).__init__()
-        self.NUM_CLASSES = NUM_CLASSES
-        self.pixelcnnpp = pixelcnnpp
-        self.loss_op = loss_op
-        if 'models' not in os.listdir():
-            os.mkdir('models')
-        torch.save(self.state_dict(), 'models/conditional_pixelcnn.pth')
-
-    def forward(self, x, device):
-            B = x.shape[0]
-            labels = torch.zeros(B, dtype=torch.int64).to(device)
-            guess_losses = torch.zeros((self.NUM_CLASSES, B)).to(device)
-            for i in range(self.NUM_CLASSES):
-                guess_label = torch.ones(B, dtype=torch.int64).to(device) * i
-                model_output = self.pixelcnnpp(x, guess_label)
-                guess_losses[i] = self.loss_op(x, model_output, False)
-            _, labels = torch.min(guess_losses, dim=0)
-            return labels
+    def classify(self, x, device, loss_op):
+        batch_size = x.shape[0]
+        guess_losses = torch.zeros((self.num_classes, batch_size)).to(device)
+        guess_labels = torch.arange(self.num_classes).view(self.num_classes, 1).expand(-1, batch_size).to(device)
+        for i in range(self.num_classes):
+            model_output = self(x, guess_labels[i], False)
+            guess_losses[i] = loss_op(x, model_output, False)
+        loss, labels = torch.min(guess_losses, dim=0)
+        return loss, labels
 
     
 class random_classifier(nn.Module):

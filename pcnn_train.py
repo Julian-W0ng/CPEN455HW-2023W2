@@ -27,7 +27,7 @@ def train_or_test(model, data_loader, optimizer, loss_op, device, args, epoch, m
         model_input, category_names = item
         model_input = model_input.to(device)
         if mode == 'training' or mode == 'val':
-            categories = torch.tensor([my_bidict[cat] for cat in category_names], dtype=torch.int32).to(device)
+            categories = torch.tensor([my_bidict[cat] for cat in category_names], dtype=torch.long).to(device)
             model_output = model(model_input, categories)
             loss = loss_op(model_input, model_output)
             loss_tracker.update(loss.item()/deno)
@@ -35,6 +35,15 @@ def train_or_test(model, data_loader, optimizer, loss_op, device, args, epoch, m
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
+                random_num = np.random.rand()
+                if random_num < 0.1:
+                    pixelccn_classifier = PixelCNNClassifier(len(my_bidict), model)
+                    pixelccn_classifier = pixelccn_classifier.to(device)
+                    cross_entropy_loss = torch.nn.CrossEntropyLoss()
+                    logits = pixelccn_classifier(model_input, device)
+                    loss = cross_entropy_loss(logits, categories)
+                    optimizer.zero_grad()
+                    loss.backward()
             else:
                 losses, labels = model.classify(model_input, device)
                 accuracy_tracker = mean_tracker()

@@ -37,7 +37,7 @@ if __name__ == "__main__":
         os.makedirs(gen_data_dir)
     #Begin of your code
     #Load your model and generate images in the gen_data_dir
-    model = PixelCNN(nr_resnet=1, nr_filters=40, input_channels=3, nr_logistic_mix=5)
+    model = PixelCNN(nr_resnet=2, nr_filters=40, input_channels=3, nr_logistic_mix=5, num_classes=len(my_bidict))
     model = model.to(device)
     model = model.eval()
     my_sample(model=model, gen_data_dir=gen_data_dir)

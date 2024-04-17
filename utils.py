@@ -183,12 +183,13 @@ def right_shift(x, pad=None):
 def sample(model, sample_batch_size, obs, sample_op, num_classes=4):
     model.train(False)
     with torch.no_grad():
+        labels = torch.randint(0, num_classes, (sample_batch_size,)).to(next(model.parameters()).device)
         data = torch.zeros(sample_batch_size, obs[0], obs[1], obs[2])
         data = data.to(next(model.parameters()).device)
         for i in range(obs[1]):
             for j in range(obs[2]):
                 data_v = data
-                out   = model(data_v, sample=True)
+                out   = model(data_v, labels, sample=True)
                 out_sample = sample_op(out)
                 data[:, :, i, j] = out_sample.data[:, :, i, j]
     return data

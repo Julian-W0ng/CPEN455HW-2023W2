@@ -97,10 +97,14 @@ class PixelCNN(nn.Module):
         self.init_padding = None
 
         self.num_classes = num_classes
-        self.embeddings = nn.Embedding(num_classes, 160)
+        self.embeddings = nn.Embedding(num_classes, nr_filters)
 
 
     def forward(self, x, labels=None, sample=False):
+
+        label_embeddings = self.embeddings(labels)
+        label_embeddings = label_embeddings.unsqueeze(-1).unsqueeze(-1)
+
         # similar as done in the tf repo :
         if self.init_padding is not sample:
             xs = [int(y) for y in x.size()]
@@ -112,13 +116,11 @@ class PixelCNN(nn.Module):
             padding = Variable(torch.ones(xs[0], 1, xs[2], xs[3]), requires_grad=False)
             padding = padding.cuda() if x.is_cuda else padding.to(x.device)
             x = torch.cat((x, padding), 1)
-            labels = torch.randint(0, self.num_classes, (x.shape[0],))
-            labels = labels.to(x.device)
 
         ###      UP PASS    ###
         x = x if sample else torch.cat((x, self.init_padding), 1)
         u_list  = [self.u_init(x)]
-        ul_list = [self.ul_init[0](x) + self.ul_init[1](x)]
+        ul_list = [self.ul_init[0](x) + self.ul_init[1](x) + label_embeddings]
         for i in range(3):
             # resnet block
             u_out, ul_out = self.up_layers[i](u_list[-1], ul_list[-1])
@@ -134,11 +136,6 @@ class PixelCNN(nn.Module):
         u  = u_list.pop()
         ul = ul_list.pop()
 
-        label_embeddings = self.embeddings(labels)
-        B, D, H, W = ul.size()
-        label_embeddings = label_embeddings.unsqueeze(-1).unsqueeze(-1).expand(B, D, H, W)
-        ul = ul + label_embeddings
-
         for i in range(3):
             # resnet block
             u, ul = self.down_layers[i](u, ul, u_list, ul_list)
@@ -153,6 +150,17 @@ class PixelCNN(nn.Module):
         assert len(u_list) == len(ul_list) == 0, pdb.set_trace()
 
         return x_out
+
+
+    def classify(self, x, device):
+        batch_size = x.shape[0]
+        guess_losses = torch.zeros((self.num_classes, batch_size)).to(device)
+        for i in range(self.num_classes):
+            guess_label = torch.ones(batch_size, dtype=torch.int64).to(device) * i
+            model_output = self(x, guess_label)
+            guess_losses[i] = discretized_mix_logistic_loss(x, model_output, False)
+        losses, labels = torch.min(guess_losses, dim=0)
+        return losses, labels
 
 
 class random_classifier(nn.Module):

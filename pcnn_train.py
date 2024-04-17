@@ -8,7 +8,6 @@ import wandb
 from utils import *
 from model import * 
 from dataset import *
-from classification_evaluation import get_label
 from tqdm import tqdm
 from pprint import pprint
 import argparse
@@ -37,14 +36,12 @@ def train_or_test(model, data_loader, optimizer, loss_op, device, args, epoch, m
                 loss.backward()
                 optimizer.step()
             else:
-                labels = get_label(model, model_input, device)
+                losses, labels = model.classify(model_input, device)
                 accuracy_tracker = mean_tracker()
                 accuracy_tracker.update(torch.sum(labels == categories).item()/args.batch_size)
         else:
-            labels = get_label(model, model_input, device)
-            model_output = model(model_input, labels)
-            loss = loss_op(model_input, model_output)
-            loss_tracker.update(torch.sum(loss).item()/deno)
+            losses, labels = model.classify(model_input, device)
+            loss_tracker.update(torch.sum(losses).item()/deno)
 
         
     if args.en_wandb:
@@ -192,7 +189,7 @@ if __name__ == '__main__':
     args.obs = (3, 32, 32)
     input_channels = args.obs[0]
     
-    loss_op   = lambda real, fake, sum_over_batch=True : discretized_mix_logistic_loss(real, fake, sum_over_batch)
+    loss_op   = lambda real, fake : discretized_mix_logistic_loss(real, fake)
     sample_op = lambda x : sample_from_discretized_mix_logistic(x, args.nr_logistic_mix)
 
     model = PixelCNN(nr_resnet=args.nr_resnet, nr_filters=args.nr_filters, 

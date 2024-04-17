@@ -84,12 +84,12 @@ class PixelCNN(nn.Module):
         self.upsize_ul_stream = nn.ModuleList([down_right_shifted_deconv2d(nr_filters,
                                                     nr_filters, stride=(2,2)) for _ in range(2)])
 
-        self.u_init = down_shifted_conv2d(input_channels + 1, nr_filters, filter_size=(2,3),
+        self.u_init = down_shifted_conv2d(input_channels + 2, nr_filters, filter_size=(2,3),
                         shift_output_down=True)
 
-        self.ul_init = nn.ModuleList([down_shifted_conv2d(input_channels + 1, nr_filters,
+        self.ul_init = nn.ModuleList([down_shifted_conv2d(input_channels + 2, nr_filters,
                                             filter_size=(1,3), shift_output_down=True),
-                                       down_right_shifted_conv2d(input_channels + 1, nr_filters,
+                                       down_right_shifted_conv2d(input_channels + 2, nr_filters,
                                             filter_size=(2,1), shift_output_right=True)])
 
         num_mix = 3 if self.input_channels == 1 else 10
@@ -97,13 +97,13 @@ class PixelCNN(nn.Module):
         self.init_padding = None
 
         self.num_classes = num_classes
-        self.embeddings = nn.Embedding(num_classes, nr_filters)
+        self.embeddings = nn.Embedding(num_classes, 32*32)
 
 
     def forward(self, x, labels=None, sample=False):
 
-        label_embeddings = self.embeddings(labels)
-        label_embeddings = label_embeddings.unsqueeze(-1).unsqueeze(-1)
+        label_embeddings = self.embeddings(labels).view(-1, 1, 32, 32)
+        x = torch.cat((x, label_embeddings), 1)
 
         # similar as done in the tf repo :
         if self.init_padding is not sample:
@@ -120,7 +120,7 @@ class PixelCNN(nn.Module):
         ###      UP PASS    ###
         x = x if sample else torch.cat((x, self.init_padding), 1)
         u_list  = [self.u_init(x)]
-        ul_list = [self.ul_init[0](x) + self.ul_init[1](x) + label_embeddings]
+        ul_list = [self.ul_init[0](x) + self.ul_init[1](x)]
         for i in range(3):
             # resnet block
             u_out, ul_out = self.up_layers[i](u_list[-1], ul_list[-1])

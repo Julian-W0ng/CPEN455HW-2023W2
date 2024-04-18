@@ -84,12 +84,12 @@ class PixelCNN(nn.Module):
         self.upsize_ul_stream = nn.ModuleList([down_right_shifted_deconv2d(nr_filters,
                                                     nr_filters, stride=(2,2)) for _ in range(2)])
 
-        self.u_init = down_shifted_conv2d(input_channels + 2, nr_filters, filter_size=(2,3),
+        self.u_init = down_shifted_conv2d(input_channels + 1, nr_filters, filter_size=(2,3),
                         shift_output_down=True)
 
-        self.ul_init = nn.ModuleList([down_shifted_conv2d(input_channels + 2, nr_filters,
+        self.ul_init = nn.ModuleList([down_shifted_conv2d(input_channels + 1, nr_filters,
                                             filter_size=(1,3), shift_output_down=True),
-                                       down_right_shifted_conv2d(input_channels + 2, nr_filters,
+                                       down_right_shifted_conv2d(input_channels + 1, nr_filters,
                                             filter_size=(2,1), shift_output_right=True)])
 
         num_mix = 3 if self.input_channels == 1 else 10
@@ -97,13 +97,14 @@ class PixelCNN(nn.Module):
         self.init_padding = None
 
         self.num_classes = num_classes
-        self.embeddings = nn.Embedding(num_classes, 32*32)
+        self.middle_u_embedding = nn.Embedding(num_classes, self.nr_filters)
+        self.middle_ul_embedding = nn.Embedding(num_classes, self.nr_filters)
 
 
     def forward(self, x, labels=None, sample=False):
 
-        label_embeddings = self.embeddings(labels).view(-1, 1, 32, 32)
-        x = torch.cat((x, label_embeddings), 1)
+        middle_u_embeddings = self.middle_u_embedding(labels).view(-1, self.nr_filters, 1, 1)
+        middle_ul_embeddings = self.middle_ul_embedding(labels).view(-1, self.nr_filters, 1, 1)
 
         # similar as done in the tf repo :
         if self.init_padding is not sample:
@@ -135,6 +136,8 @@ class PixelCNN(nn.Module):
         ###    DOWN PASS    ###
         u  = u_list.pop()
         ul = ul_list.pop()
+        u = u + middle_u_embeddings
+        ul = ul + middle_ul_embeddings
 
         for i in range(3):
             # resnet block
@@ -145,6 +148,7 @@ class PixelCNN(nn.Module):
                 u  = self.upsize_u_stream[i](u)
                 ul = self.upsize_ul_stream[i](ul)
 
+        # x_out = self.nin_out(F.elu(ul+end_embeddings))
         x_out = self.nin_out(F.elu(ul))
 
         assert len(u_list) == len(ul_list) == 0, pdb.set_trace()

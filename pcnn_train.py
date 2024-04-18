@@ -32,24 +32,18 @@ def train_or_test(model, data_loader, optimizer, loss_op, device, args, epoch, m
             loss = loss_op(model_input, model_output)
             loss_tracker.update(loss.item()/deno)
             if mode == 'training':
+                losses, labels, logits = model.classify(model_input, device)
+                cross_entropy_loss = torch.nn.CrossEntropyLoss()
+                loss += cross_entropy_loss(-logits, categories)
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
-                random_num = np.random.rand()
-                if random_num < 0.1:
-                    pixelccn_classifier = PixelCNNClassifier(len(my_bidict), model)
-                    pixelccn_classifier = pixelccn_classifier.to(device)
-                    cross_entropy_loss = torch.nn.CrossEntropyLoss()
-                    logits = pixelccn_classifier(model_input, device)
-                    loss = cross_entropy_loss(logits, categories)
-                    optimizer.zero_grad()
-                    loss.backward()
             else:
-                losses, labels = model.classify(model_input, device)
+                losses, labels, logits = model.classify(model_input, device)
                 accuracy_tracker = mean_tracker()
                 accuracy_tracker.update(torch.sum(labels == categories).item()/args.batch_size)
         else:
-            losses, labels = model.classify(model_input, device)
+            losses, labels, logits = model.classify(model_input, device)
             loss_tracker.update(torch.sum(losses).item()/deno)
 
         
@@ -209,7 +203,8 @@ if __name__ == '__main__':
         model.load_state_dict(torch.load(args.load_params))
         print('model parameters loaded')
 
-    optimizer = optim.Adam(model.parameters(), lr=args.lr)
+    # optimizer = optim.Adam(model.parameters(), lr=args.lr)
+    optimizer = optim.AdamW(model.parameters(), lr=args.lr)
     scheduler = lr_scheduler.StepLR(optimizer, step_size=1, gamma=args.lr_decay)
     
     for epoch in tqdm(range(args.max_epochs)):

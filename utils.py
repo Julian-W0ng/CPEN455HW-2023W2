@@ -101,7 +101,7 @@ def discretized_mix_logistic_loss(x, l, sum_over_batch=True):
     if sum_over_batch:
         return -torch.sum(log_sum_exp(log_probs))
     else:
-        return torch.sum(log_sum_exp(log_probs), dim=[1, 2])
+        return -torch.sum(log_sum_exp(log_probs), dim=[1, 2])
 
 
 def to_one_hot(tensor, n, fill_with=1.):

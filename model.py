@@ -84,12 +84,12 @@ class PixelCNN(nn.Module):
         self.upsize_ul_stream = nn.ModuleList([down_right_shifted_deconv2d(nr_filters,
                                                     nr_filters, stride=(2,2)) for _ in range(2)])
 
-        self.u_init = down_shifted_conv2d(input_channels + 1, nr_filters, filter_size=(2,3),
+        self.u_init = down_shifted_conv2d(input_channels + 2, nr_filters, filter_size=(2,3),
                         shift_output_down=True)
 
-        self.ul_init = nn.ModuleList([down_shifted_conv2d(input_channels + 1, nr_filters,
+        self.ul_init = nn.ModuleList([down_shifted_conv2d(input_channels + 2, nr_filters,
                                             filter_size=(1,3), shift_output_down=True),
-                                       down_right_shifted_conv2d(input_channels + 1, nr_filters,
+                                       down_right_shifted_conv2d(input_channels + 2, nr_filters,
                                             filter_size=(2,1), shift_output_right=True)])
 
         num_mix = 3 if self.input_channels == 1 else 10
@@ -97,13 +97,13 @@ class PixelCNN(nn.Module):
         self.init_padding = None
 
         self.num_classes = num_classes
-        self.input_embeddings = nn.Embedding(num_classes, input_channels*32*32)
+        self.embeddings = nn.Embedding(num_classes, 32*32)
 
 
     def forward(self, x, labels=None, sample=False):
 
-        input_label_embeddings = self.input_embeddings(labels).view(-1, self.input_channels, 32, 32)
-        x = x + input_label_embeddings
+        label_embeddings = self.embeddings(labels).view(-1, 1, 32, 32)
+        x = torch.cat((x, label_embeddings), 1)
 
         # similar as done in the tf repo :
         if self.init_padding is not sample:
@@ -154,30 +154,14 @@ class PixelCNN(nn.Module):
 
     def classify(self, x, device):
         batch_size = x.shape[0]
-        guess_losses = torch.zeros((self.num_classes, batch_size)).to(device)
-        for i in range(self.num_classes):
-            guess_label = torch.ones(batch_size, dtype=torch.int64).to(device) * i
-            model_output = self(x, guess_label)
-            guess_losses[i] = discretized_mix_logistic_loss(x, model_output, False)
-        losses, labels = torch.max(guess_losses, dim=0)
-        return losses, labels
+        # repeat x for each class (batch_size*num_classes, 3, 32, 32)
+        x = x.repeat(self.num_classes, 1, 1, 1)
+        guess_labels = torch.arange(self.num_classes).repeat_interleave(batch_size).to(device)
+        model_out = self(x, guess_labels)
+        logits = discretized_mix_logistic_loss(x, model_out, False).view(self.num_classes, batch_size).permute(1, 0)
+        losses, labels = torch.min(logits, dim=1)
+        return losses, labels, logits
 
-class PixelCNNClassifier(nn.Module):
-    def __init__(self, NUM_CLASSES, pixelcnn : PixelCNN):
-        super(PixelCNNClassifier, self).__init__()
-        self.NUM_CLASSES = NUM_CLASSES
-        self.pixelcnn = pixelcnn
-
-
-    def forward(self, x, device):
-        batch_size = x.shape[0]
-        logits = torch.zeros((batch_size, self.NUM_CLASSES)).to(device)
-        for i in range(self.NUM_CLASSES):
-            guess_label = torch.ones(batch_size, dtype=torch.int64).to(device) * i
-            model_output = self.pixelcnn(x, guess_label)
-            logits[:, i] = discretized_mix_logistic_loss(x, model_output, False)
-        return logits
-        
 
 class random_classifier(nn.Module):
     def __init__(self, NUM_CLASSES):

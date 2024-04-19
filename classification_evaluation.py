@@ -11,6 +11,7 @@ from utils import *
 from model import * 
 from dataset import *
 from tqdm import tqdm
+import csv
 from pprint import pprint
 import argparse
 NUM_CLASSES = len(my_bidict)
@@ -26,6 +27,16 @@ def get_label(model, model_input, device):
 def classifier(model, data_loader, device):
     model.eval()
     acc_tracker = ratio_tracker()
+
+    # Start
+    image_path_label = []
+    with open('data/test.csv', 'r') as f:
+        reader = csv.reader(f)
+        for row in reader:
+            image_path_label.append((row, -1))
+
+    i = 0
+    # End
     for batch_idx, item in enumerate(tqdm(data_loader)):
         model_input, categories = item
         model_input = model_input.to(device)
@@ -34,6 +45,16 @@ def classifier(model, data_loader, device):
         answer = get_label(model, model_input, device)
         correct_num = torch.sum(answer == original_label)
         acc_tracker.update(correct_num.item(), model_input.shape[0])
+    # Start
+        for a in answer:
+            image_path_label[i] = (image_path_label[i][0], a.item())
+            i += 1
+
+    with open('answers.csv', 'w') as f:
+        writer = csv.writer(f)
+        for row in image_path_label:
+            writer.writerow(row)
+    # End
     
     return acc_tracker.get_ratio()
         
@@ -59,7 +80,7 @@ if __name__ == '__main__':
                                                             mode = args.mode, 
                                                             transform=ds_transforms), 
                                              batch_size=args.batch_size, 
-                                             shuffle=True, 
+                                             shuffle=False, # TODO: change to True
                                              **kwargs)
 
     #Write your code here

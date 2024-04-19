@@ -97,14 +97,14 @@ class PixelCNN(nn.Module):
         self.init_padding = None
 
         self.num_classes = num_classes
-        self.middle_u_embedding = nn.Embedding(num_classes, self.nr_filters)
-        self.middle_ul_embedding = nn.Embedding(num_classes, self.nr_filters)
+        self.middle_u_embedding = nn.Embedding(num_classes, self.nr_filters*8*8)
+        self.middle_ul_embedding = nn.Embedding(num_classes, self.nr_filters*8*8)
 
 
     def forward(self, x, labels=None, sample=False):
 
-        middle_u_embeddings = self.middle_u_embedding(labels).view(-1, self.nr_filters, 1, 1)
-        middle_ul_embeddings = self.middle_ul_embedding(labels).view(-1, self.nr_filters, 1, 1)
+        middle_u_embeddings = self.middle_u_embedding(labels).view(-1, self.nr_filters, 8, 8)
+        middle_ul_embeddings = self.middle_ul_embedding(labels).view(-1, self.nr_filters, 8, 8)
 
         # similar as done in the tf repo :
         if self.init_padding is not sample:

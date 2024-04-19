@@ -26,21 +26,21 @@ def train_or_test(model, data_loader, optimizer, loss_op, device, args, epoch, m
     for batch_idx, item in enumerate(tqdm(data_loader)):
         model_input, category_names = item
         model_input = model_input.to(device)
+        losses, labels, logits = model.classify(model_input, device)
         if mode == 'training' or mode == 'val':
             categories = torch.tensor([my_bidict[cat] for cat in category_names], dtype=torch.long).to(device)
-            model_output = model(model_input, categories)
-            loss = loss_op(model_input, model_output)
+            loss = torch.gather(logits, 1, categories.view(-1, 1)).sum()
             loss_tracker.update(loss.item()/deno)
             if mode == 'training':
+                cross_entropy_loss = torch.nn.CrossEntropyLoss()
+                loss += cross_entropy_loss(logits, categories)
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
             else:
-                losses, labels, logits = model.classify(model_input, device)
                 accuracy_tracker = mean_tracker()
                 accuracy_tracker.update(torch.sum(labels == categories).item()/args.batch_size)
         else:
-            losses, labels, logits = model.classify(model_input, device)
             loss_tracker.update(torch.sum(losses).item()/deno)
 
         
@@ -165,6 +165,10 @@ if __name__ == '__main__':
     
     elif "cpen455" in args.dataset:
         ds_transforms = transforms.Compose([transforms.Resize((32, 32)), rescaling])
+        data_augmentaion_transforms = transforms.Compose([transforms.Resize((32, 32)), 
+                                                          transforms.RandomHorizontalFlip(),
+                                                          transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1),
+                                                          rescaling])
         train_loader = torch.utils.data.DataLoader(CPEN455Dataset(root_dir=args.data_dir, 
                                                                   mode = 'train', 
                                                                   transform=ds_transforms), 

@@ -21,7 +21,7 @@ NUM_CLASSES = len(my_bidict)
 # Begin of your code
 def get_label(model, model_input, device):
     losses, labels, logits = model.classify(model_input, device)
-    return labels
+    return labels, logits
 # End of your code
 
 def classifier(model, data_loader, device):
@@ -30,6 +30,7 @@ def classifier(model, data_loader, device):
 
     # Start
     image_path_label = []
+    test_logits = np.empty((0, NUM_CLASSES))
     with open('data/test.csv', 'r') as f:
         reader = csv.reader(f)
         for row in reader:
@@ -43,7 +44,8 @@ def classifier(model, data_loader, device):
         model_input = model_input.to(device)
         # original_label = [my_bidict[item] for item in categories]
         # original_label = torch.tensor(original_label, dtype=torch.int64).to(device)
-        answer = get_label(model, model_input, device)
+        answer, logits = get_label(model, model_input, device)
+        test_logits = np.concatenate((test_logits, logits.cpu().detach().numpy()), axis=0)
         # correct_num = torch.sum(answer == original_label)
         # acc_tracker.update(correct_num.item(), model_input.shape[0])
     # Start
@@ -56,6 +58,9 @@ def classifier(model, data_loader, device):
         writer.writerow(['id', 'label'])
         for row in image_path_label:
             writer.writerow(row)
+    
+    # save test_logits as npy file
+    np.save('test_logits.npy', test_logits)
     # End
     
     return acc_tracker.get_ratio()

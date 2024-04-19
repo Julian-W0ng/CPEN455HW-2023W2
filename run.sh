@@ -5,8 +5,9 @@ python pcnn_train.py \
 --save_interval 25 \
 --dataset cpen455 \
 --nr_resnet 3 \
---nr_filters 160 \
+--nr_filters 40 \
 --nr_logistic_mix 5 \
---lr_decay 0.999995 \
+--lr_decay 0.9995 \
 --max_epochs 1000 \
+--load_params ./conditional_pixelcnn2.pth \
 --en_wandb True \

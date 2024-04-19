@@ -158,7 +158,6 @@ class PixelCNN(nn.Module):
 
     def classify(self, x, device):
         batch_size = x.shape[0]
-        # repeat x for each class (batch_size*num_classes, 3, 32, 32)
         x = x.repeat(self.num_classes, 1, 1, 1)
         guess_labels = torch.arange(self.num_classes).repeat_interleave(batch_size).to(device)
         model_out = self(x, guess_labels)

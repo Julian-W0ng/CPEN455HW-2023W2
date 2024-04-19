@@ -40,7 +40,7 @@ if __name__ == "__main__":
     #Load your model and generate images in the gen_data_dir
     model = PixelCNN(nr_resnet=3, nr_filters=40, input_channels=3, nr_logistic_mix=5, num_classes=len(my_bidict))
     model = model.to(device)
-    model.load_state_dict(torch.load('models/pcnn_cpen455_load_model_999.pth'))
+    model.load_state_dict(torch.load('models/conditional_pixelcnn.pth'))
     model = model.eval()
     my_sample(model=model, gen_data_dir=gen_data_dir)
     #End of your code

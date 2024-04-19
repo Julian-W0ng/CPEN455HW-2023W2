@@ -28,35 +28,14 @@ def classifier(model, data_loader, device):
     model.eval()
     acc_tracker = ratio_tracker()
 
-    # Start
-    image_path_label = []
-    with open('data/test.csv', 'r') as f:
-        reader = csv.reader(f)
-        for row in reader:
-            row = row[0].split('/')[-1]
-            image_path_label.append((row, -1))
-
-    i = 0
-    # End
     for batch_idx, item in enumerate(tqdm(data_loader)):
         model_input, categories = item
         model_input = model_input.to(device)
-        # original_label = [my_bidict[item] for item in categories]
-        # original_label = torch.tensor(original_label, dtype=torch.int64).to(device)
+        original_label = [my_bidict[item] for item in categories]
+        original_label = torch.tensor(original_label, dtype=torch.int64).to(device)
         answer = get_label(model, model_input, device)
-        # correct_num = torch.sum(answer == original_label)
-        # acc_tracker.update(correct_num.item(), model_input.shape[0])
-    # Start
-        for a in answer:
-            image_path_label[i] = (image_path_label[i][0], a.item())
-            i += 1
-
-    with open('answers2.csv', 'w') as f:
-        writer = csv.writer(f)
-        writer.writerow(['id', 'label'])
-        for row in image_path_label:
-            writer.writerow(row)
-    # End
+        correct_num = torch.sum(answer == original_label)
+        acc_tracker.update(correct_num.item(), model_input.shape[0])
     
     return acc_tracker.get_ratio()
         
@@ -82,7 +61,7 @@ if __name__ == '__main__':
                                                             mode = args.mode, 
                                                             transform=ds_transforms), 
                                              batch_size=args.batch_size, 
-                                             shuffle=False, # TODO: change to True
+                                             shuffle=True,
                                              **kwargs)
 
     #Write your code here
@@ -94,7 +73,7 @@ if __name__ == '__main__':
     model = model.to(device)
     #Attention: the path of the model is fixed to 'models/conditional_pixelcnn.pth'
     #You should save your model to this path
-    model.load_state_dict(torch.load('models/pcnn_cpen455_load_model_999.pth'))
+    model.load_state_dict(torch.load('models/conditional_pixelcnn.pth'))
     model.eval()
     print('model parameters loaded')
     acc = classifier(model = model, data_loader = dataloader, device = device)

@@ -136,8 +136,8 @@ class PixelCNN(nn.Module):
         ###    DOWN PASS    ###
         u  = u_list.pop()
         ul = ul_list.pop()
-        u = u + middle_u_embeddings
-        ul = ul + middle_ul_embeddings
+        u = F.relu(u + middle_u_embeddings)
+        ul = F.relu(ul + middle_ul_embeddings)
 
         for i in range(3):
             # resnet block
